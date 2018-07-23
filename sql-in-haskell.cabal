@@ -15,6 +15,7 @@ cabal-version:        >=1.10
 
 executable sql-in-haskell
   main-is:              Main.hs
+  build-depends:        parsec == 3.1.1
   -- other-modules:
   -- other-extensions:
   build-depends:        base >= 4.7 && < 5
