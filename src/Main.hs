@@ -5,6 +5,8 @@ import Control.Monad
 
 -- Parser for a simple SQL like language:
 --     select * from table
+--     select table.* from table
+--     select table.a from table
 --     select a, b, c from table
 --     select a from table
 --     select func(*), func(*) from table
@@ -19,11 +21,13 @@ joinWithCommas (x:xs) = (show x) ++ ", " ++ (joinWithCommas xs)
 data Argument =
     Star
     | Column String
+    | TableColumn String String
     | Function String [Argument]
 
 instance Show Argument where
-    show (Column column) = column
     show Star = "*"
+    show (Column column) = column
+    show (TableColumn table column) = table ++ "." ++ column
     show (Function name args) = name ++ "(" ++ joinWithCommas(args) ++ ")"
 
 data Table =
@@ -51,11 +55,24 @@ parseName = many1 letter
 parseStar :: Parser Argument
 parseStar = char '*' >> return Star
 
+parseTableColumn :: Parser Argument
+parseTableColumn =
+    do
+        table <- parseName
+        char '.'
+        column <- (string "*" <|> parseName)
+        return $ TableColumn table column
+
 parseColumn :: Parser Argument
 parseColumn =
     do
-        name <- parseName
-        return $ Column name
+        column <- parseName
+        return $ Column column
+
+parseColumnArgument :: Parser Argument
+parseColumnArgument =
+    try parseTableColumn <|>
+    parseColumn
 
 parseFunc :: Parser Argument
 parseFunc =
@@ -70,7 +87,7 @@ parseArg :: Parser Argument
 parseArg =
     parseStar <|>
     try parseFunc <|>
-    parseColumn
+    parseColumnArgument
 
 parseArgs :: Parser [Argument]
 parseArgs = commaSep parseArg
@@ -85,6 +102,7 @@ parseSelect =
         string "from"
         spaces
         table <- parseName
+        eof
         return (Select args (Table table))
 
 parseExpr :: Parser Sql
