@@ -5,9 +5,10 @@ Currently the implementation echos back the SQL that you entered.
 
 ## Usage
 
-This project uses Cabal:
+This project uses [Cabal](http://katychuang.com/cabal-guide/):
+Ensure you have a cabal sandbox up and running:
 
-```
+```shell
 cabal sandbox init
 
 cabal configure
@@ -16,4 +17,10 @@ cabal build
 cabal run "select func(func(*), bar, baz), qux, * from table"
 ```
 
-> http://katychuang.com/cabal-guide/
+## Tests
+
+To run the [hspec](https://hspec.github.io/) tests, use cabal:
+
+```shell
+cabal test
+```
