@@ -30,3 +30,5 @@ cabal test
 - http://learnyouahaskell.com/
 - http://dev.stephendiehl.com/hask/
 - http://blog.moertel.com/posts/2005-08-27-power-parsing-with-haskell-and-parsec.html
+- https://kseo.github.io/posts/2014-01-07-parsing-arithmetic-expressions-with-parsec.html
+- https://wiki.haskell.org/Parsing_expressions_and_statements
