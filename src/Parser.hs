@@ -32,11 +32,13 @@ instance Show Argument where
     show (Function name args) = name ++ "(" ++ joinWithCommas(args) ++ ")"
     show (ArgumentExpression e) = show e
 
-data Symbol = Plus | Minus
+data Symbol = Plus | Minus | Multiply | Divide
 
 instance Show Symbol where
     show Plus = "+"
     show Minus = "-"
+    show Multiply = "*"
+    show Divide = "/"
 
 data Expression =
     Number Integer
@@ -68,6 +70,9 @@ parseExpr = buildExpressionParser operatorTable parseTerm <?> "expression"
 -- Operators that appear first have higher precedence, operators that beside eachother
 -- in the same array have the same precedence
 operatorTable = [
+        -- Multiply and Divide have the same precedence and are left associative
+        [Infix (parseBinary "*" Multiply) AssocLeft, Infix (parseBinary "/" Divide) AssocLeft],
+
         -- Plus and Minus have the same precedence and are left associative
         [Infix (parseBinary "+" Plus) AssocLeft, Infix (parseBinary "-" Minus) AssocLeft]
     ]
@@ -81,12 +86,20 @@ parseBinary operatorString operatorSymbol =
         -- implementation will provide us with our left/right trees once parsing is successful
         return (BinaryOperator operatorSymbol)
 
+withBrackets :: Parser a -> Parser a
+withBrackets parser =
+    do
+        char '('
+        result <- parser
+        char ')'
+        return result
+
 parseTerm :: Parser Expression
 parseTerm =
     do
-        number <- parseNumber
+        term <- parseNumber <|> (withBrackets parseExpr)
         spaces
-        return number <?> "number"
+        return term <?> "term"
 
 parseNumber :: Parser Expression
 parseNumber = liftM (Number . read) $ many1 digit
@@ -126,9 +139,7 @@ parseFunc :: Parser Argument
 parseFunc =
     do
         name <- parseName
-        char '('
-        args <- parseArgs
-        char ')'
+        args <- (withBrackets parseArgs)
         return $ Function name args
 
 parseArg :: Parser Argument

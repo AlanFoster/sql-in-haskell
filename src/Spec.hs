@@ -46,22 +46,12 @@ main = hspec $ do
                     `shouldPrettyPrintAs`
                     "select (1 - 2) from table"
 
-            it "supports the subtraction of numbers" $ do
-                "select 1 - 2 - 3 from table"
-                    `shouldPrettyPrintAs`
-                    "select ((1 - 2) - 3) from table"
-
-            it "supports the subtraction of numbers" $ do
-                "select 1 - 2 - 3 - 4 from table"
-                   `shouldPrettyPrintAs`
-                    "select (((1 - 2) - 3) - 4) from table"
-
             it "supports an arbitrary selection of operators" $ do
                 "select 1 + 2 - 3 + 4 from table"
                    `shouldPrettyPrintAs`
                     "select (((1 + 2) - 3) + 4) from table"
 
             it "supports an arbitrary selection of operators" $ do
-                "select 1 + 2 - 3 + 4, 1 + 2 + 3 from table"
+                "select max(1 + 2 * 3 / 2 + (1 - 1)), min(1 + 2) from table"
                    `shouldPrettyPrintAs`
-                    "select (((1 + 2) - 3) + 4), ((1 + 2) + 3) from table"
+                    "select max(((1 + ((2 * 3) / 2)) + (1 - 1))), min((1 + 2)) from table"
