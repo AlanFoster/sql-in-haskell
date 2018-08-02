@@ -29,7 +29,7 @@ main = hspec $ do
                     `shouldPrettyPrintAs`
                         "select foo(a, b, c), bar(d, e, f, *) from foo"
 
-        describe "It provides supports operator precedence" $ do
+        describe "it provides supports operator precedence" $ do
             it "supports the addition of numbers" $ do
                 "select 1 + 2 from table"
                     `shouldPrettyPrintAs`
@@ -59,3 +59,9 @@ main = hspec $ do
                 "select max(1 + 2 * 3 / 2 + (1 - 1)), min(1 + 2) from table"
                    `shouldPrettyPrintAs`
                     "select max(((1 + ((2 * 3) / 2)) + (1 - 1))), min((1 + 2)) from table"
+
+        describe "Edge cases" $ do
+            it "Star syntax within brackets should work" $ do
+                "select ((*)) from table"
+                   `shouldPrettyPrintAs`
+                    "select * from table"

@@ -28,61 +28,69 @@ import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Expr
 import Control.Monad
 
-joinWithCommas :: (Show a) => [a] -> String
-joinWithCommas [] = ""
-joinWithCommas [x] = show x
-joinWithCommas (x:xs) = (show x) ++ ", " ++ (joinWithCommas xs)
+-- Abstract Data types
 
-data Projection =
+data Expression =
     Star
-    | ProjectionExpression ProjectionExpression
+    | Number Integer
     | Column String
-    | Function String [Projection]
+    | Function String [Expression]
+    | BinaryOperator Symbol Expression Expression
 
-instance Show Projection where
+instance Show Expression where
     show Star = "*"
-    show (Column column) = column
+    show (Number value) = show value
+    show (Column identifier) = identifier
     show (Function name args) = name ++ "(" ++ joinWithCommas(args) ++ ")"
-    show (ProjectionExpression e) = show e
+    show (BinaryOperator symbol left right) =
+        "(" ++ (show left) ++ " " ++ (show symbol) ++ " " ++ (show right) ++ ")"
 
 data Symbol = Plus | Minus | Multiply | Divide
-
 instance Show Symbol where
     show Plus = "+"
     show Minus = "-"
     show Multiply = "*"
     show Divide = "/"
 
-data ProjectionExpression =
-    Number Integer
-    | BinaryOperator Symbol ProjectionExpression ProjectionExpression
-
-instance Show ProjectionExpression where
-    show (Number value) =
-        show value
-    show (BinaryOperator symbol left right) =
-        "(" ++ (show left) ++ " " ++ (show symbol) ++ " " ++ (show right) ++ ")"
-
-data Table =
-    Table String
-
-instance Show Table where
-    show (Table table) = table
-
-data Sql =
-    Select [Projection] Table
+-- select expressions from table
+data Sql = Select [Expression] String
 
 instance Show Sql where
     show (Select selection table) =
-        "select " ++ (joinWithCommas selection) ++ " from " ++ (show table)
+        "select " ++ (joinWithCommas selection) ++ " from " ++ table
 
-parseProjectionExpr :: Parser ProjectionExpression
-parseProjectionExpr = buildExpressionParser operatorTable parseTerm <?> "expression"
+-- Helpers
+
+joinWithCommas :: (Show a) => [a] -> String
+joinWithCommas [] = ""
+joinWithCommas [x] = show x
+joinWithCommas (x:xs) = (show x) ++ ", " ++ (joinWithCommas xs)
+
+withinBrackets :: Parser a -> Parser a
+withinBrackets parser =
+    (withSpaces $ char '(') *> parser <* (withSpaces $ char ')')
+
+withSpaces :: Parser a -> Parser a
+withSpaces p = p <* spaces
+
+withSpaces1 :: Parser a -> Parser a
+withSpaces1 p = p <* skipMany1 space
+
+commaSep :: Parser a -> Parser [a]
+commaSep p = p `sepBy` (withSpaces $ char ',')
+
+-- Parsers
+
+parseExpression :: Parser Expression
+parseExpression = buildExpressionParser operatorTable parseTerm <?> "expression"
+
+parseExpressions :: Parser [Expression]
+parseExpressions = commaSep parseExpression
 
 -- Specify the operator table and the associated precedences
 -- Operators that appear first have higher precedence, operators that beside eachother
 -- in the same array have the same precedence
-operatorTable :: [[Operator Char () ProjectionExpression]]
+operatorTable :: [[Operator Char () Expression]]
 operatorTable = [
         -- Multiply and Divide have the same precedence and are left associative
         [Infix (parseBinary "*" Multiply) AssocLeft, Infix (parseBinary "/" Divide) AssocLeft],
@@ -91,7 +99,7 @@ operatorTable = [
         [Infix (parseBinary "+" Plus) AssocLeft, Infix (parseBinary "-" Minus) AssocLeft]
     ]
 
-parseBinary :: String -> Symbol -> Parser (ProjectionExpression -> ProjectionExpression -> ProjectionExpression)
+parseBinary :: String -> Symbol -> Parser (Expression -> Expression -> Expression)
 parseBinary operatorString operatorSymbol =
     do
         void $ string operatorString
@@ -100,57 +108,47 @@ parseBinary operatorString operatorSymbol =
         -- implementation will provide us with our left/right trees once parsing is successful
         return (BinaryOperator operatorSymbol)
 
-withinBrackets :: Parser a -> Parser a
-withinBrackets parser =
-    (withSpaces $ char '(') *> parser <* (withSpaces $ char ')')
-
-parseTerm :: Parser ProjectionExpression
+parseTerm :: Parser Expression
 parseTerm =
-    withSpaces (parseNumber <|> (withinBrackets parseProjectionExpr)) <?> "term"
+    (parseNumber
+        <|> parseColumn
+        <|> (withinBrackets parseExpression)
+        <|> parseStar)
+        <?> "term"
 
-parseNumber :: Parser ProjectionExpression
-parseNumber = liftM (Number . read) $ many1 digit
+parseNumber :: Parser Expression
+parseNumber = Number <$> parseInteger
 
-spaces1 :: Parser ()
-spaces1 = skipMany1 space
+parseInteger :: Parser Integer
+parseInteger = liftM read (withSpaces $ many1 digit)
 
-withSpaces :: Parser a -> Parser a
-withSpaces p = p <* spaces
+parseColumn :: Parser Expression
+parseColumn = Column <$> parseIdentifier
 
-withSpaces1 :: Parser a -> Parser a
-withSpaces1 p = p <* spaces1
+parseIdentifier :: Parser String
+parseIdentifier = withSpaces $ many1 letter
 
-commaSep :: Parser a -> Parser [a]
-commaSep p = p `sepBy` (withSpaces $ char ',')
+parseStar :: Parser Expression
+parseStar = Star <$ (withSpaces $ char '*')
 
-parseName :: Parser String
-parseName = many1 letter
-
-parseStar :: Parser Projection
-parseStar = char '*' *> return Star
-
-parseColumn :: Parser Projection
-parseColumn = Column <$> parseName
-
-parseFunc :: Parser Projection
+parseFunc :: Parser Expression
 parseFunc =
-    Function <$> (withSpaces parseName) <*> (withinBrackets parseProjections)
+    Function <$> (withSpaces parseIdentifier) <*> (withinBrackets parseExpressions)
 
-parseProjection :: Parser Projection
+parseProjection :: Parser Expression
 parseProjection =
-    (ProjectionExpression <$> parseProjectionExpr) <|>
-    (withSpaces parseStar) <|>
     (try $ withSpaces parseFunc) <|>
-    (withSpaces parseColumn)
+    (withSpaces parseStar) <|>
+    parseExpression
 
-parseProjections :: Parser [Projection]
+parseProjections :: Parser [Expression]
 parseProjections = commaSep parseProjection
 
 parseSelect :: Parser Sql
 parseSelect =
     Select
         <$> ((withSpaces1 $ string "select") *> parseProjections)
-        <*> ((withSpaces1 $ string "from") *> (Table <$> (withSpaces parseName)))
+        <*> ((withSpaces1 $ string "from") *> (withSpaces parseIdentifier))
 
 parseSql :: Parser Sql
 parseSql =
