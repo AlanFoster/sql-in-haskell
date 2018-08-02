@@ -24,6 +24,11 @@ main = hspec $ do
                 let sql = "select foo(a, b, c), bar(d, e, f) from table"
                 sql `shouldPrettyPrintAs` sql
 
+            it "supports function calls with multiple arguments and white space" $ do
+                "      select foo  (  a  ,   b   ,   c  )  ,   bar  (   d   ,    e   ,   f,   *   )    from   foo    "
+                    `shouldPrettyPrintAs`
+                        "select foo(a, b, c), bar(d, e, f, *) from foo"
+
         describe "It provides supports operator precedence" $ do
             it "supports the addition of numbers" $ do
                 "select 1 + 2 from table"

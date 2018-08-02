@@ -9,9 +9,19 @@
 -- Note this is a simplified version of SQL that doesn't support joins, or
 -- multiple table lookups. For this reason there is no need for table.* syntax
 --
--- Useful notes:
---  <|> Represents the choice operator
+-- Useful notes /  Hoogle cheat sheet:
 --
+--  <|> Represents the choice operator
+--  <$> Infix synonym for fmap
+--          (<$>) :: Functor f => (a -> b) -> f a -> f b
+--  <*> Sequential application, given a Functor containing a function
+--          (<*>) :: f (a -> b) -> f a -> f b
+--  <* Sequence actions, discarding the result of the second argument
+--          (<*) :: f a -> f b -> f a
+--  *> Sequence actions, discarding the result of the first argument
+--          (*>) :: f a -> f b -> f b
+--  ap
+--            ap :: Monad m => m (a -> b) -> m a -> m b
 module Parser (readExpr) where
 
 import Text.ParserCombinators.Parsec
@@ -90,20 +100,13 @@ parseBinary operatorString operatorSymbol =
         -- implementation will provide us with our left/right trees once parsing is successful
         return (BinaryOperator operatorSymbol)
 
-withBrackets :: Parser a -> Parser a
-withBrackets parser =
-    do
-        void $ char '('
-        result <- parser
-        void $ char ')'
-        return result
+withinBrackets :: Parser a -> Parser a
+withinBrackets parser =
+    (withSpaces $ char '(') *> parser <* (withSpaces $ char ')')
 
 parseTerm :: Parser ProjectionExpression
 parseTerm =
-    do
-        term <- parseNumber <|> (withBrackets parseProjectionExpr)
-        spaces
-        return term <?> "term"
+    withSpaces (parseNumber <|> (withinBrackets parseProjectionExpr)) <?> "term"
 
 parseNumber :: Parser ProjectionExpression
 parseNumber = liftM (Number . read) $ many1 digit
@@ -111,56 +114,47 @@ parseNumber = liftM (Number . read) $ many1 digit
 spaces1 :: Parser ()
 spaces1 = skipMany1 space
 
+withSpaces :: Parser a -> Parser a
+withSpaces p = p <* spaces
+
+withSpaces1 :: Parser a -> Parser a
+withSpaces1 p = p <* spaces1
+
 commaSep :: Parser a -> Parser [a]
-commaSep p = p `sepBy` (char ',' >> spaces)
+commaSep p = p `sepBy` (withSpaces $ char ',')
 
 parseName :: Parser String
 parseName = many1 letter
 
 parseStar :: Parser Projection
-parseStar = char '*' >> return Star
+parseStar = char '*' *> return Star
 
 parseColumn :: Parser Projection
-parseColumn =
-    do
-        column <- parseName
-        return $ Column column
+parseColumn = Column <$> parseName
 
 parseFunc :: Parser Projection
 parseFunc =
-    do
-        name <- parseName
-        args <- (withBrackets parseProjections)
-        return $ Function name args
+    Function <$> (withSpaces parseName) <*> (withinBrackets parseProjections)
 
 parseProjection :: Parser Projection
 parseProjection =
-    (parseProjectionExpr >>= (\x -> return (ProjectionExpression x))) <|>
-    parseStar <|>
-    try parseFunc <|>
-    parseColumn
+    (ProjectionExpression <$> parseProjectionExpr) <|>
+    (withSpaces parseStar) <|>
+    (try $ withSpaces parseFunc) <|>
+    (withSpaces parseColumn)
 
 parseProjections :: Parser [Projection]
 parseProjections = commaSep parseProjection
 
 parseSelect :: Parser Sql
 parseSelect =
-    do
-        spaces
-        void $ string "select"
-        spaces1
-        projections <- parseProjections
-        spaces
-        void $ string "from"
-        spaces1
-        table <- parseName
-        spaces
-        eof
-        return (Select projections (Table table))
+    Select
+        <$> ((withSpaces1 $ string "select") *> parseProjections)
+        <*> ((withSpaces1 $ string "from") *> (Table <$> (withSpaces parseName)))
 
 parseSql :: Parser Sql
 parseSql =
-    parseSelect
+    spaces *> (withSpaces parseSelect) <* eof
 
 readExpr :: String -> String
 readExpr input =
