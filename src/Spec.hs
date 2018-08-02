@@ -1,5 +1,4 @@
 import Test.Hspec
-import Control.Exception (evaluate)
 import Parser
 
 shouldPrettyPrintAs :: String -> String -> IO ()

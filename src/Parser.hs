@@ -69,6 +69,7 @@ parseProjectionExpr = buildExpressionParser operatorTable parseTerm <?> "express
 -- Specify the operator table and the associated precedences
 -- Operators that appear first have higher precedence, operators that beside eachother
 -- in the same array have the same precedence
+operatorTable :: [[Operator Char () ProjectionExpression]]
 operatorTable = [
         -- Multiply and Divide have the same precedence and are left associative
         [Infix (parseBinary "*" Multiply) AssocLeft, Infix (parseBinary "/" Divide) AssocLeft],
@@ -80,7 +81,7 @@ operatorTable = [
 parseBinary :: String -> Symbol -> Parser (ProjectionExpression -> ProjectionExpression -> ProjectionExpression)
 parseBinary operatorString operatorSymbol =
     do
-        string operatorString
+        void $ string operatorString
         spaces
         -- Partially apply our binary operator data constructor, the `buildExpressionParser`
         -- implementation will provide us with our left/right trees once parsing is successful
@@ -89,9 +90,9 @@ parseBinary operatorString operatorSymbol =
 withBrackets :: Parser a -> Parser a
 withBrackets parser =
     do
-        char '('
+        void $ char '('
         result <- parser
-        char ')'
+        void $ char ')'
         return result
 
 parseTerm :: Parser ProjectionExpression
@@ -120,7 +121,7 @@ parseTableColumn :: Parser Projection
 parseTableColumn =
     do
         table <- parseName
-        char '.'
+        void $ char '.'
         column <- (string "*" <|> parseName)
         return $ TableColumn table column
 
@@ -156,11 +157,11 @@ parseSelect :: Parser Sql
 parseSelect =
     do
         spaces
-        string "select"
+        void $ string "select"
         spaces1
         projections <- parseProjections
         spaces
-        string "from"
+        void $ string "from"
         spaces1
         table <- parseName
         spaces
