@@ -1,12 +1,17 @@
 -- Parser for a simple SQL like language:
 --     select * from table
---     select table.* from table
---     select table.a from table
 --     select a, b, c from table
 --     select a from table
 --     select func(*), func(*) from table
 --     select func(func(*)), func(*) from table
 --     select [expr]* from table
+--
+-- Note this is a simplified version of SQL that doesn't support joins, or
+-- multiple table lookups. For this reason there is no need for table.* syntax
+--
+-- Useful notes:
+--  <|> Represents the choice operator
+--
 module Parser (readExpr) where
 
 import Text.ParserCombinators.Parsec
@@ -22,13 +27,11 @@ data Projection =
     Star
     | ProjectionExpression ProjectionExpression
     | Column String
-    | TableColumn String String
     | Function String [Projection]
 
 instance Show Projection where
     show Star = "*"
     show (Column column) = column
-    show (TableColumn table column) = table ++ "." ++ column
     show (Function name args) = name ++ "(" ++ joinWithCommas(args) ++ ")"
     show (ProjectionExpression e) = show e
 
@@ -109,7 +112,7 @@ spaces1 :: Parser ()
 spaces1 = skipMany1 space
 
 commaSep :: Parser a -> Parser [a]
-commaSep p = sepBy p (char ',' >> spaces)
+commaSep p = p `sepBy` (char ',' >> spaces)
 
 parseName :: Parser String
 parseName = many1 letter
@@ -117,24 +120,11 @@ parseName = many1 letter
 parseStar :: Parser Projection
 parseStar = char '*' >> return Star
 
-parseTableColumn :: Parser Projection
-parseTableColumn =
-    do
-        table <- parseName
-        void $ char '.'
-        column <- (string "*" <|> parseName)
-        return $ TableColumn table column
-
 parseColumn :: Parser Projection
 parseColumn =
     do
         column <- parseName
         return $ Column column
-
-parseColumnProjection :: Parser Projection
-parseColumnProjection =
-    try parseTableColumn <|>
-    parseColumn
 
 parseFunc :: Parser Projection
 parseFunc =
@@ -148,7 +138,7 @@ parseProjection =
     (parseProjectionExpr >>= (\x -> return (ProjectionExpression x))) <|>
     parseStar <|>
     try parseFunc <|>
-    parseColumnProjection
+    parseColumn
 
 parseProjections :: Parser [Projection]
 parseProjections = commaSep parseProjection

@@ -13,7 +13,7 @@ main = hspec $ do
                 sql `shouldPrettyPrintAs` sql
 
             it "supports select statements with multiple selections" $ do
-                let sql = "select table.foo, table.baz, table.qux from table"
+                let sql = "select foo, baz, qux from table"
                 sql `shouldPrettyPrintAs` sql
 
             it "supports function calls" $ do
