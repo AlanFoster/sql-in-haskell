@@ -14,6 +14,18 @@ cabal sandbox init
 cabal configure
 cabal install
 cabal build
+```
+
+Entering an interactive terminal with the parsing library loaded, which is great for exploring
+parsing:
+
+```
+cabal repl scheme-in-haskell
+```
+
+Running the program directly:
+
+```
 cabal run "select func(func(*), bar, baz), qux, * from table"
 ```
 
