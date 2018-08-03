@@ -3,9 +3,16 @@
 This repository represents a toy parser using the Parser Combinator library Parsec.
 Currently the implementation echos back the SQL that you entered.
 
+```
+$ cabal run "select * from table where a >= 1 + 2 / 3"
+
+"select * from table where (a >= (1 + (2 / 3)))"
+```
+
 ## Usage
 
-This project uses [Cabal](http://katychuang.com/cabal-guide/):
+This project uses [Cabal](http://katychuang.com/cabal-guide/)
+
 Ensure you have a cabal sandbox up and running:
 
 ```shell
@@ -27,6 +34,18 @@ Running the program directly:
 
 ```
 cabal run "select func(func(*), bar, baz), qux, * from table"
+```
+
+## Supported syntax
+
+This parser is for a subset of the SQL language, and only supports querying from one table.
+
+Examples:
+
+```sql
+select * from table
+select func(func(*), bar, baz), qux from table
+select * from table where a >= 1 + 2 / 3
 ```
 
 ## Tests
