@@ -20,8 +20,6 @@
 --          (<*) :: f a -> f b -> f a
 --  *> Sequence actions, discarding the result of the first argument
 --          (*>) :: f a -> f b -> f b
---  ap
---            ap :: Monad m => m (a -> b) -> m a -> m b
 module Parser (readExpr) where
 
 import Text.ParserCombinators.Parsec
@@ -36,6 +34,8 @@ data Expression =
     | Column String
     | Function String [Expression]
     | BinaryOperator Symbol Expression Expression
+    | RelativeDateTime Day (Maybe Time)
+    | ExactDateTime DateTime
 
 instance Show Expression where
     show Star = "*"
@@ -44,6 +44,36 @@ instance Show Expression where
     show (Function name args) = name ++ "(" ++ joinWithCommas(args) ++ ")"
     show (BinaryOperator symbol left right) =
         "(" ++ (show left) ++ " " ++ (show symbol) ++ " " ++ (show right) ++ ")"
+    show (RelativeDateTime day Nothing) = (show day)
+    show (RelativeDateTime day (Just time)) = (show day) ++ " at '" ++ time ++ "'"
+    show (ExactDateTime value) = "'" ++ value ++ "'"
+
+type Time = String
+type DateTime = String
+
+data Day =
+    Today
+    | Yesterday
+    | LastWeek
+    | Monday
+    | Tuesday
+    | Wednesday
+    | Thursday
+    | Friday
+    | Saturday
+    | Sunday
+
+instance Show Day where
+    show Today = "today"
+    show Yesterday = "yesterday"
+    show LastWeek = "last week"
+    show Monday = "monday"
+    show Tuesday = "tuesday"
+    show Wednesday = "wednesday"
+    show Thursday = "thursday"
+    show Friday = "friday"
+    show Saturday = "saturday"
+    show Sunday = "sunday"
 
 data Symbol =
     Plus
@@ -74,14 +104,16 @@ data Sql =
     Select {
         projection :: [Expression],
         table :: String,
-        predicate :: Maybe Expression
+        predicate :: Maybe Expression,
+        since :: Maybe Expression
     }
 
 instance Show Sql where
     show select =
         "select " ++ (joinWithCommas $ projection select) ++ " " ++
         "from " ++ (table select) ++
-        (maybe "" ((++) " where " . show) (predicate select))
+        (maybe "" ((++) " where " . show) (predicate select)) ++
+        (maybe "" ((++) " since " . show) (since select))
 
 -- Helpers
 
@@ -187,6 +219,9 @@ parseIdentifier = withSpaces $ many1 letter
 parseStar :: Parser Expression
 parseStar = Star <$ (withSpaces $ char '*')
 
+parseString :: Parser String
+parseString = withSpaces (char '\'' *> manyTill anyChar (char '\''))
+
 parseFunc :: Parser Expression
 parseFunc =
     Function <$> (withSpaces parseIdentifier) <*> (withinBrackets parseExpressions)
@@ -203,12 +238,37 @@ parseProjections = commaSep parseProjection
 parsePredicate :: Parser Expression
 parsePredicate = parseExpression
 
+parseRelativeDateTime :: Parser Expression
+parseRelativeDateTime =
+    RelativeDateTime
+        <$> (
+            (Today <$ (withSpaces $ try $ string "today")) <|>
+            (Yesterday <$ (withSpaces $ try $ string "yesterday")) <|>
+            (LastWeek <$ (withSpaces $ try $ string "last week")) <|>
+            (Monday <$ (withSpaces $ try $ string "monday")) <|>
+            (Tuesday <$ (withSpaces $ try $ string "tuesday")) <|>
+            (Wednesday <$ (withSpaces $ try $ string "wednesday")) <|>
+            (Thursday <$ (withSpaces $ try $ string "thursday")) <|>
+            (Friday <$ (withSpaces $ try $ string "friday")) <|>
+            (Saturday <$ (withSpaces $ try $ string "saturday")) <|>
+            (Sunday <$ (withSpaces $ try $ string "sunday"))
+        )
+        <*> optionMaybe ((withSpaces $ string "at") *> parseString)
+
+parseExactDateTime :: Parser Expression
+parseExactDateTime = ExactDateTime <$> parseString
+
+parseDateTime :: Parser Expression
+parseDateTime =
+    parseRelativeDateTime <|> parseExactDateTime
+
 parseSelect :: Parser Sql
 parseSelect =
     Select
         <$> ((withSpaces1 $ string "select") *> parseProjections)
         <*> ((withSpaces1 $ string "from") *> (withSpaces parseIdentifier))
         <*> optionMaybe ((withSpaces1 $ string "where") *> parsePredicate)
+        <*> optionMaybe ((withSpaces1 $ string "since") *> parseDateTime)
 
 parseSql :: Parser Sql
 parseSql =
