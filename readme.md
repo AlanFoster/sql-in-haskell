@@ -3,10 +3,10 @@
 This repository represents a toy parser using the Parser Combinator library Parsec.
 Currently the implementation echos back the SQL that you entered.
 
-```
-$ cabal run "select * from table where a >= 1 + 2 / 3"
+```shell
+$ cabal run "select * from table where col >= 1 + 2 / 3 since last week until yesterday at '08:00'"
 
-"select * from table where (a >= (1 + (2 / 3)))"
+"select * from table where (col >= (1 + (2 / 3))) since last week until yesterday at '08:00'"
 ```
 
 ## Usage
@@ -26,13 +26,13 @@ cabal build
 Entering an interactive terminal with the parsing library loaded, which is great for exploring
 parsing:
 
-```
+```shell
 cabal repl scheme-in-haskell
 ```
 
 Running the program directly:
 
-```
+```shell
 cabal run "select func(func(*), bar, baz), qux, * from table"
 ```
 
@@ -46,6 +46,8 @@ Examples:
 select * from table
 select func(func(*), bar, baz), qux from table
 select * from table where a >= 1 + 2 / 3
+select * from table since monday at '8:00'
+select * from table where col >= 1 + 2 / 3 since last week until yesterday at '08:00'
 ```
 
 ## Tests

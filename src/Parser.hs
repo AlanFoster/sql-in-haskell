@@ -1,13 +1,13 @@
--- Parser for a simple SQL like language:
---     select * from table
---     select a, b, c from table
---     select a from table
---     select func(*), func(*) from table
---     select func(func(*)), func(*) from table
---     select [expr]* from table
---
--- Note this is a simplified version of SQL that doesn't support joins, or
+-- This is a parser for a simplified version of SQL that doesn't support joins, or
 -- multiple table lookups. For this reason there is no need for table.* syntax
+--
+-- Examples:
+--
+--      select * from table
+--      select func(func(*), bar, baz), qux from table
+--      select * from table where a >= 1 + 2 / 3
+--      select * from table since monday at '8:00'
+--      select * from table where col >= 1 + 2 / 3 since last week until yesterday at '08:00'
 --
 -- Useful notes /  Hoogle cheat sheet:
 --
@@ -22,6 +22,7 @@
 --          (*>) :: f a -> f b -> f b
 module Parser (readExpr) where
 
+import Prelude hiding (until)
 import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Expr
 import Control.Monad
@@ -105,7 +106,8 @@ data Sql =
         projection :: [Expression],
         table :: String,
         predicate :: Maybe Expression,
-        since :: Maybe Expression
+        since :: Maybe Expression,
+        until :: Maybe Expression
     }
 
 instance Show Sql where
@@ -113,7 +115,8 @@ instance Show Sql where
         "select " ++ (joinWithCommas $ projection select) ++ " " ++
         "from " ++ (table select) ++
         (maybe "" ((++) " where " . show) (predicate select)) ++
-        (maybe "" ((++) " since " . show) (since select))
+        (maybe "" ((++) " since " . show) (since select)) ++
+        (maybe "" ((++) " until " . show) (until select))
 
 -- Helpers
 
@@ -269,6 +272,7 @@ parseSelect =
         <*> ((withSpaces1 $ string "from") *> (withSpaces parseIdentifier))
         <*> optionMaybe ((withSpaces1 $ string "where") *> parsePredicate)
         <*> optionMaybe ((withSpaces1 $ string "since") *> parseDateTime)
+        <*> optionMaybe ((withSpaces1 $ string "until") *> parseDateTime)
 
 parseSql :: Parser Sql
 parseSql =
