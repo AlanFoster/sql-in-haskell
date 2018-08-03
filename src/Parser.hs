@@ -45,19 +45,43 @@ instance Show Expression where
     show (BinaryOperator symbol left right) =
         "(" ++ (show left) ++ " " ++ (show symbol) ++ " " ++ (show right) ++ ")"
 
-data Symbol = Plus | Minus | Multiply | Divide
+data Symbol =
+    Plus
+    | Minus
+    | Multiply
+    | Divide
+    | Equal
+    | NotEqual
+    | GreaterThan
+    | GreaterThanOrEqual
+    | LessThan
+    | LessThanOrEqual
+
 instance Show Symbol where
     show Plus = "+"
     show Minus = "-"
     show Multiply = "*"
     show Divide = "/"
+    show Equal = "="
+    show NotEqual = "!="
+    show GreaterThan = ">"
+    show GreaterThanOrEqual = ">="
+    show LessThan = "<"
+    show LessThanOrEqual = "<="
 
--- select expressions from table
-data Sql = Select [Expression] String
+-- select expressions from table where foo = 10
+data Sql =
+    Select {
+        projection :: [Expression],
+        table :: String,
+        predicate :: Maybe Expression
+    }
 
 instance Show Sql where
-    show (Select selection table) =
-        "select " ++ (joinWithCommas selection) ++ " from " ++ table
+    show select =
+        "select " ++ (joinWithCommas $ projection select) ++ " " ++
+        "from " ++ (table select) ++
+        (maybe "" ((++) " where " . show) (predicate select))
 
 -- Helpers
 
@@ -93,20 +117,52 @@ parseExpressions = commaSep parseExpression
 operatorTable :: [[Operator Char () Expression]]
 operatorTable = [
         -- Multiply and Divide have the same precedence and are left associative
-        [Infix (parseBinary "*" Multiply) AssocLeft, Infix (parseBinary "/" Divide) AssocLeft],
+        [
+            Infix (parseBinary "*" Multiply) AssocLeft,
+            Infix (parseBinary "/" Divide) AssocLeft
+        ],
 
         -- Plus and Minus have the same precedence and are left associative
-        [Infix (parseBinary "+" Plus) AssocLeft, Infix (parseBinary "-" Minus) AssocLeft]
+        [
+            Infix (parseBinary "+" Plus) AssocLeft,
+            Infix (parseBinary "-" Minus) AssocLeft
+        ],
+
+        -- Relational operators all have the same precedence, and I'm opting for it not being associative
+        [
+            Infix (parseBinary ">" GreaterThan) AssocNone,
+            Infix (parseBinary ">=" GreaterThanOrEqual) AssocNone,
+
+            Infix (parseBinary "<" LessThan) AssocNone,
+            Infix (parseBinary "<=" LessThanOrEqual) AssocNone
+        ],
+
+        -- Equality Operators
+        [
+            Infix (parseBinary "=" Equal) AssocNone,
+            Infix (parseBinary "!=" NotEqual) AssocNone
+        ]
     ]
 
 parseBinary :: String -> Symbol -> Parser (Expression -> Expression -> Expression)
 parseBinary operatorString operatorSymbol =
     do
-        void $ string operatorString
+        void $ parseOperator operatorString
         spaces
         -- Partially apply our binary operator data constructor, the `buildExpressionParser`
         -- implementation will provide us with our left/right trees once parsing is successful
         return (BinaryOperator operatorSymbol)
+
+-- Helper to help avoid ambiguity of operators by chosing the maximal munch
+-- For instance, given an input string `>=` and a requiredOperator `>` without
+-- this implementation we would consume a `>` and leave an invalid `=` character
+-- behind. Instead we will only parse successfully if the required operator
+-- consumes all characters
+parseOperator :: String -> Parser String
+parseOperator requiredOperator =  try $ withSpaces $ do
+    maximalMunch <- many1 (oneOf "*/+->=<!")
+    guard (maximalMunch == requiredOperator)
+    return maximalMunch
 
 parseTerm :: Parser Expression
 parseTerm =
@@ -144,11 +200,15 @@ parseProjection =
 parseProjections :: Parser [Expression]
 parseProjections = commaSep parseProjection
 
+parsePredicate :: Parser Expression
+parsePredicate = parseExpression
+
 parseSelect :: Parser Sql
 parseSelect =
     Select
         <$> ((withSpaces1 $ string "select") *> parseProjections)
         <*> ((withSpaces1 $ string "from") *> (withSpaces parseIdentifier))
+        <*> optionMaybe ((withSpaces1 $ string "where") *> parsePredicate)
 
 parseSql :: Parser Sql
 parseSql =
